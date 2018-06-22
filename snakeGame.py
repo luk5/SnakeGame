@@ -1,7 +1,5 @@
 import pygame
 import random
-import queue
-import threading
 import time
 from pygame.locals import *
 
@@ -11,7 +9,8 @@ class Snake:
     STARTY = 10
     STARTLENGTH = 3
 
-    # Directions
+    # Possible snake directions
+    # [Coordinate (x or y), Unit (increase or descrease)]
     WAIT = [0, 0]
     LEFT = [0, -1]
     RIGHT = [0, 1]
@@ -42,19 +41,23 @@ class Snake:
         self.direction = self.WAIT
         self.dead = False
 
+    # turn_left changes snake direction to left
     def turn_left(self):
         self.direction = self.LEFT
 
+    # turn_right changes snake direction to right
     def turn_right(self):
         self.direction = self.RIGHT
 
+    # turn_up changes snake direction to up
     def turn_up(self):
         self.direction = self.UP
 
+    # turn_down changes snake direction to down
     def turn_down(self):
         self.direction = self.DOWN
 
-    # Update snake head and body positions based on chosen direction
+    # move updates snake head and body positions based on chosen direction
     def move(self, screen_size, cookie):
         if self.direction != self.WAIT:
             coord = self.direction[0]
@@ -76,6 +79,7 @@ class Snake:
                     new_body = [self.head_position[:]] + self.body_position[:]
                     self.body_position = new_body
                     return True
+                # If snake does not eat cookie
                 else:
                     # Update snake body
                     # Remove last body part and append remaining body
@@ -83,7 +87,7 @@ class Snake:
                     new_body = [self.head_position[:]] + self.body_position[:]
                     self.body_position = new_body
 
-    # Draw snake head and snake body
+    # draw makes a new snake head and body image on screen for given positions
     def draw(self, tile, screen):
         for i in range(len(self.body_position)):
             # Draw head first
@@ -95,7 +99,7 @@ class Snake:
                 body_tile = (self.body_position[i][0] * tile, self.body_position[i][1] * tile)
                 screen.blit(self.body_img, body_tile)
 
-    # Erase previous snake head and last body part
+    # erase removes previous snake head and last body part from screen
     def erase(self, cmap, tile, screen):
         # Erase head
         hx = self.head_old[0]
@@ -111,12 +115,13 @@ class Snake:
         tcolor_index = (tx + ty + 1) % 2
         screen.fill(cmap[tcolor_index], tail_tile)
 
+    # rip replaces snake head image with a skull images
     def rip(self, tile, screen):
         skull_tile = (self.head_position[0] * tile, self.head_position[1] * tile)
         screen.blit(self.skull_img, skull_tile)
 
 class Cookie:
-
+    # Initial cookie settings
     STARTX = 12
     STARTY = 10
     EATEN = 0
@@ -129,6 +134,7 @@ class Cookie:
         self.cookie_eaten = self.EATEN
         self.cookie_position = [self.STARTX, self.STARTY]
 
+    # new calculates a new cookie position that does not overlap with snake body
     def new(self, screen, snake):
         self.cookie_eaten += 1
         x = random.randint(2, screen - 3)
@@ -142,6 +148,7 @@ class Cookie:
 
         self.cookie_position = new_cookie
 
+    # draw makes a new cookie image on screen for given cookie position
     def draw(self, tile, screen):
         cookie_tile = (self.cookie_position[0] * tile, self.cookie_position[1] * tile)
         screen.blit(self.cookie_img, cookie_tile)
@@ -151,7 +158,7 @@ class App:
     TILESIZE = 30
     SCREENSIZE = 20
 
-    # Color map = [White, Grey, Blue]
+    # Color map = [WHITE, GREY, BLUE, RED]
     WHITE = 0
     GREY = 1
     BLUE = 2
@@ -162,11 +169,13 @@ class App:
     RUN = 1
     STOP = 0
 
+    # Initialize app
     def __init__(self):
         self._running = True
         self.screen = None
         self.state = None
 
+    # draw_background draws window borders and checker board
     def draw_background(self):
         for row in range(self.SCREENSIZE):
             colorIndex = row % 2
@@ -184,6 +193,7 @@ class App:
                         colorIndex = (colorIndex + 1) % 2
         pygame.display.update()
 
+    # draw_title draws title on window
     def draw_title(self, text):
         font_path = "SnakeChan.ttf"
         font_size = self.TILESIZE
@@ -196,6 +206,7 @@ class App:
         self.screen.blit(title, rect)
         pygame.display.update()
 
+    # draw_score draws updated score on window
     def draw_score(self, text, score):
         font_path = "SnakeChan.ttf"
         font_size = self.TILESIZE
@@ -210,6 +221,7 @@ class App:
         self.screen.blit(title, rect)
         pygame.display.update()
 
+    # draw_end draws graphics for game over screen on window
     def draw_end(self, text):
         font_path = "SnakeChan.ttf"
         font_size = self.TILESIZE * 3
@@ -222,40 +234,22 @@ class App:
         self.screen.blit(title, rect)
         pygame.display.update()
 
-
+    # on_init initializes game settings and draws window graphics
     def on_init(self):
         pygame.init()
         pygame.font.init()
         self._running = True
+        self.state = self.RUN
+        self.snake = Snake(self.TILESIZE)
+        self.cookie = Cookie(self.TILESIZE)
 
+        # Window settings
         self.screen = pygame.display.set_mode((self.TILESIZE * self.SCREENSIZE , self.TILESIZE * self.SCREENSIZE))
         self.draw_background()
         self.draw_title("S N A K E   G A M E")
-        self.snake = Snake(self.TILESIZE)
-        self.cookie = Cookie(self.TILESIZE)
-        self.state = self.RUN
 
-    def on_event(self, event):
-        if event.type == pygame.QUIT:
-            self._running = False
 
-        elif event.type == KEYDOWN:
-            if self.state == self.RUN:
-                if event.key == K_ESCAPE:
-                    self._running = False
-
-                if event.key == K_LEFT:
-                    self.snake.turn_left()
-
-                if event.key == K_RIGHT:
-                    self.snake.turn_right()
-
-                if event.key == K_UP:
-                    self.snake.turn_up()
-
-                if event.key == K_DOWN:
-                    self.snake.turn_down()
-
+    # on_loop moves snake if it's alive, otherwise does not move
     def on_loop(self):
         if self.snake.dead:
             self.state == self.STOP
@@ -264,29 +258,41 @@ class App:
             if ate_cookie: self.cookie.new(self.SCREENSIZE, self.snake.body_position)
         pass
 
+    # on_render draws window graphics
     def on_render(self):
+        # Display game over screen
         if self.snake.dead:
             self.snake.rip(self.TILESIZE, self.screen)
             self.draw_end("G A M E  O V E R")
+        # Redraw snake if alive
         else:
             self.snake.erase(self.CMAP, self.TILESIZE, self.screen)
             self.snake.draw(self.TILESIZE, self.screen)
             self.cookie.draw(self.TILESIZE, self.screen)
             self.draw_score("S C O R E : ", self.cookie.cookie_eaten)
 
-        pygame.display.flip()
+        pygame.display.update()
 
+    # on_clean quits game
     def on_cleanup(self):
         pygame.quit()
 
+    # on_execute starts game and handles user input
     def on_execute(self):
         if self.on_init() == False:
             self._running = False
 
         while(self._running):
+            # Close window
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self._running = False
+
+            # Control game on key press
             pygame.event.pump()
             key = pygame.key.get_pressed()
 
+            # Move snake
             if (key[K_LEFT]):
                 self.snake.turn_left()
 
@@ -299,6 +305,7 @@ class App:
             if (key[K_DOWN]):
                 self.snake.turn_down()
 
+            # Close window with escape key
             if (key[K_ESCAPE]):
                 self._running = False
 
