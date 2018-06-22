@@ -5,44 +5,166 @@ import threading
 import time
 from pygame.locals import *
 
-class App:
+class Snake:
     # Initial snake settings
-    STARTX = 10
+    STARTX = 8
     STARTY = 10
     STARTLENGTH = 3
 
-    # Display screen settings
-    TILESIZE = 30
-    SCREENSIZE = 20
-
-    # Color map = [White, Grey, Blue, Green]
-    WHITE = 0
-    GREY = 1
-    BLUE = 2
-    GREEN = 3
-    CMAP = [(255,255,255), (200,200,200), (0, 204, 255), (153, 204, 0)]
-
     # Directions
+    WAIT = [0, 0]
     LEFT = [0, -1]
     RIGHT = [0, 1]
     UP = [1, -1]
     DOWN = [1, 1]
 
-    RUNNING = 1
-    STOPPED = 0
+    # Initialize snake properties
+    def __init__(self, tile):
+        self.length = self.STARTLENGTH
 
-    def __init__(self, ready=None):
-        self.running = True
-        self.screen = None
-        self.clock = None
-        self.ready = ready
-        self.cookie_position = []
-        self.snake_size = None
-        self.snake_head = None
-        self.head_position = []
-        self.snake_body = None
+        self.head_img = pygame.image.load("images/head.png")
+        self.head_img = pygame.transform.scale(self.head_img, (tile, tile))
+        self.head_position = [self.STARTX, self.STARTY]
+        self.head_old = self.head_position[:]
+
+        self.body_img = pygame.image.load("images/body.png")
+        self.body_img = pygame.transform.scale(self.body_img, (tile, tile))
         self.body_position = []
-        self.direction = []
+        self.body_position.append(self.head_position[:])
+        for i in range(1, self.STARTLENGTH+1):
+            body_part = [self.head_position[0] - i, self.head_position[1]]
+            self.body_position.append(body_part)
+        self.tail_old = self.body_position[-1]
+
+        self.skull_img = pygame.image.load("images/dead.png")
+        self.skull_img = pygame.transform.scale(self.skull_img, (tile, tile))
+
+        self.direction = self.WAIT
+        self.dead = False
+
+    def turn_left(self):
+        self.direction = self.LEFT
+
+    def turn_right(self):
+        self.direction = self.RIGHT
+
+    def turn_up(self):
+        self.direction = self.UP
+
+    def turn_down(self):
+        self.direction = self.DOWN
+
+    # Update snake head and body positions based on chosen direction
+    def move(self, screen_size, cookie):
+        if self.direction != self.WAIT:
+            coord = self.direction[0]
+            unit = self.direction[1]
+            new_head = self.head_position[coord] + unit
+            check_position = self.head_position[:]
+            check_position[coord] = new_head
+
+            # Check if head hits the border or hits its own body
+            if new_head < 1 or new_head > screen_size - 2 or check_position in self.body_position:
+                self.dead = True
+            else:
+                # Update snake head position
+                self.head_position[coord] = new_head
+
+                # If snake eats cookie, make a new cookie
+                # Extend body length by adding new head to current body
+                if self.head_position == cookie:
+                    new_body = [self.head_position[:]] + self.body_position[:]
+                    self.body_position = new_body
+                    return True
+                else:
+                    # Update snake body
+                    # Remove last body part and append remaining body
+                    self.tail_old = self.body_position.pop()
+                    new_body = [self.head_position[:]] + self.body_position[:]
+                    self.body_position = new_body
+
+    # Draw snake head and snake body
+    def draw(self, tile, screen):
+        for i in range(len(self.body_position)):
+            # Draw head first
+            if i == 0:
+                head_tile = (self.head_position[0] * tile, self.head_position[1] * tile)
+                screen.blit(self.head_img, head_tile)
+            # Draw body parts
+            else:
+                body_tile = (self.body_position[i][0] * tile, self.body_position[i][1] * tile)
+                screen.blit(self.body_img, body_tile)
+
+    # Erase previous snake head and last body part
+    def erase(self, cmap, tile, screen):
+        # Erase head
+        hx = self.head_old[0]
+        hy = self.head_old[1]
+        head_tile = (hx * tile, hy * tile, tile, tile)
+        hcolor_index = (hx + hy + 1) % 2
+        screen.fill(cmap[hcolor_index], head_tile)
+
+        # Erase last body part
+        tx = self.tail_old[0]
+        ty = self.tail_old[1]
+        tail_tile = (tx * tile, ty * tile, tile, tile)
+        tcolor_index = (tx + ty + 1) % 2
+        screen.fill(cmap[tcolor_index], tail_tile)
+
+    def rip(self, tile, screen):
+        skull_tile = (self.head_position[0] * tile, self.head_position[1] * tile)
+        screen.blit(self.skull_img, skull_tile)
+
+class Cookie:
+
+    STARTX = 12
+    STARTY = 10
+    EATEN = 0
+
+    # Initialize cookie properties
+    def __init__(self, tile):
+        self.cookie_img = pygame.image.load("images/cookie.png")
+        self.cookie_img = pygame.transform.scale(self.cookie_img, (tile, tile))
+
+        self.cookie_eaten = self.EATEN
+        self.cookie_position = [self.STARTX, self.STARTY]
+
+    def new(self, screen, snake):
+        self.cookie_eaten += 1
+        x = random.randint(2, screen - 3)
+        y = random.randint(2, screen - 3)
+        new_cookie = [x, y]
+
+        while new_cookie in snake:
+            x = random.randint(2, screen - 3)
+            y = random.randint(2, screen - 3)
+            new_cookie = [x, y]
+
+        self.cookie_position = new_cookie
+
+    def draw(self, tile, screen):
+        cookie_tile = (self.cookie_position[0] * tile, self.cookie_position[1] * tile)
+        screen.blit(self.cookie_img, cookie_tile)
+
+class App:
+    # Display screen settings
+    TILESIZE = 30
+    SCREENSIZE = 20
+
+    # Color map = [White, Grey, Blue]
+    WHITE = 0
+    GREY = 1
+    BLUE = 2
+    RED = 3
+    CMAP = [(255,255,255), (200,200,200), (0, 204, 255), (255,0,0)]
+
+    # Game state
+    RUN = 1
+    STOP = 0
+
+    def __init__(self):
+        self._running = True
+        self.screen = None
         self.state = None
 
     def draw_background(self):
@@ -62,188 +184,130 @@ class App:
                         colorIndex = (colorIndex + 1) % 2
         pygame.display.update()
 
-    def draw_cookie(self):
-        # Make sure not on snake
-        cookie = pygame.image.load("images/cookie.png")
-        cookie = pygame.transform.scale(cookie, (self.TILESIZE, self.TILESIZE))
-
-        x = random.randint(1, self.SCREENSIZE - 2)
-        while x == self.head_position[0]:
-            x = random.randint(1, self.SCREENSIZE - 2)
-
-        y = random.randint(1, self.SCREENSIZE - 2)
-        while y == self.head_position[1]:
-            y = random.randint(1, self.SCREENSIZE - 2)
-
-        self.cookie_position = [x, y]
-        cookie_positionition = ((x * self.TILESIZE), (y * self.TILESIZE))
-        self.screen.blit(cookie, cookie_positionition)
-        pygame.display.update()
-
-    def draw_snake_body(self):
-        self.snake_body = pygame.image.load("images/body.png")
-        self.snake_body = pygame.transform.scale(self.snake_body, (self.TILESIZE, self.TILESIZE))
-
-        for i in range(1, len(self.body_position)):
-            rect = pygame.Rect(self.body_position[i][0] * self.TILESIZE, self.body_position[i][1] * self.TILESIZE, self.TILESIZE, self.TILESIZE)
-            #pygame.draw.rect(self.screen, self.CMAP[3], rect)
-            self.screen.blit(self.snake_body, rect)
-
-    def draw_snake(self):
-        # Always starts at same position
-        # Draw snake head
-        self.snake_head = pygame.image.load("images/head.png")
-        self.snake_head = pygame.transform.scale(self.snake_head, (self.TILESIZE, self.TILESIZE))
-        rect = (self.head_position[0] * self.TILESIZE, self.head_position[1] * self.TILESIZE)
-        #self.screen.fill(self.CMAP[3], (self.head_position[0] * self.TILESIZE, self.head_position[1] * self.TILESIZE, self.TILESIZE, self.TILESIZE))
-        self.screen.blit(self.snake_head, rect)
-
-        # Add head to body list
-        self.body_position.append(self.head_position[:])
-        # Add body parts to body list
-        for i in range(1, self.STARTLENGTH+1):
-            bod = [self.head_position[0] - i, self.head_position[1]]
-            self.body_position.append(bod)
-
-        self.draw_snake_body()
-        pygame.display.update()
-
-    def draw_text(self, text, size, color, x, y):
-        fontPath = "SnakeChan.ttf"
-        fontObj = pygame.font.SysFont(fontPath, size)
-        title = fontObj.render(text, True, color)
+    def draw_title(self, text):
+        font_path = "SnakeChan.ttf"
+        font_size = self.TILESIZE
+        font_obj = pygame.font.SysFont(font_path, font_size)
+        color = self.CMAP[self.WHITE]
+        title = font_obj.render(text, True, color)
+        x = int(self.SCREENSIZE * self.TILESIZE/2)
+        y = int(self.TILESIZE/2)
         rect = title.get_rect(center=(x,y))
         self.screen.blit(title, rect)
         pygame.display.update()
 
-    def setup(self):
-        pygame.init()
-        pygame.font.init()
-        self.running = True
-
-        self.length = self.STARTLENGTH
-
-        self.head_position = [self.STARTX, self.STARTY]
-        self.headImage = pygame.image.load("images/head.png")
-        self.headImage = pygame.transform.scale(self.headImage, (self.TILESIZE, self.TILESIZE))
-
-        self.bodyImage = pygame.image.load("images/body.png")
-        self.bodyImage = pygame.transform.scale(self.bodyImage, (self.TILESIZE, self.TILESIZE))
-
-        self.clock = pygame.time.Clock()
-        self.screen = pygame.display.set_mode((self.TILESIZE * self.SCREENSIZE , self.TILESIZE * self.SCREENSIZE))
-        self.draw_background()
-        self.draw_text("S N A K E   G A M E", self.TILESIZE, (255,255,255), int(self.SCREENSIZE * self.TILESIZE/2), int(self.TILESIZE/2))
-        self.draw_snake()
-        self.draw_cookie()
-        self.state = self.RUNNING
-
-    def game_over(self):
-        skull = pygame.image.load("images/dead.png")
-        skull = pygame.transform.scale(skull, (self.TILESIZE, self.TILESIZE))
-        self.screen.blit(skull,(self.head_position[0] * self.TILESIZE, self.head_position[1] * self.TILESIZE))
-        self.state = self.STOPPED
+    def draw_score(self, text, score):
+        font_path = "SnakeChan.ttf"
+        font_size = self.TILESIZE
+        font_obj = pygame.font.SysFont(font_path, font_size)
+        color = self.CMAP[self.WHITE]
+        whole_text = text + str(score)
+        title = font_obj.render(whole_text, True, color)
+        x = int(self.SCREENSIZE * self.TILESIZE/2)
+        y = int((self.SCREENSIZE * self.TILESIZE) - self.TILESIZE/2)
+        rect = title.get_rect(center=(x,y))
+        self.screen.fill(self.CMAP[self.BLUE], rect)
+        self.screen.blit(title, rect)
         pygame.display.update()
 
-    #TODO: can still move after death
-    def game_over_thread(self):
-        self.clock.tick(6)
-        t = threading.Thread(target=self.game_over, args=())
-        t.start()
-        ready.wait()
+    def draw_end(self, text):
+        font_path = "SnakeChan.ttf"
+        font_size = self.TILESIZE * 3
+        font_obj = pygame.font.SysFont(font_path, font_size)
+        color = self.CMAP[self.RED]
+        title = font_obj.render(text, True, color)
+        x = int(self.SCREENSIZE * self.TILESIZE/2)
+        y = int((self.SCREENSIZE * self.TILESIZE/2))
+        rect = title.get_rect(center=(x,y))
+        self.screen.blit(title, rect)
+        pygame.display.update()
 
-    def move_snake(self, coord, unit):
-        newPos = self.head_position[coord] + (unit * 1)
-        checkPos = self.head_position[:]
-        checkPos[coord] = newPos
-        if newPos < 1 or newPos > self.SCREENSIZE - 2 or checkPos in self.body_position:
-            self.direction = []
-            self.game_over_thread()
-        else:
-            # Erase previous snake head
-            bgx = self.head_position[0]
-            bgy = self.head_position[1]
-            tile = (bgx * self.TILESIZE, bgy * self.TILESIZE, self.TILESIZE, self.TILESIZE)
-            colorIndex = (bgx +bgy + 1) % 2
-            self.screen.fill(self.CMAP[colorIndex], tile)
 
-            # Draw new snake head
-            self.head_position[coord] = newPos
-            self.screen.blit(self.snake_head,(self.head_position[0] * self.TILESIZE, self.head_position[1] * self.TILESIZE))
+    def on_init(self):
+        pygame.init()
+        pygame.font.init()
+        self._running = True
 
-            # If snake eats cookie, make a new cookie
-            if self.head_position == self.cookie_position:
-                self.draw_cookie()
-                newbody = [self.head_position[:]] + self.body_position[:]
-                self.body_position = newbody
-                self.draw_snake_body()
-
-            else:
-                # Draw new snake body
-                fill = self.body_position.pop()
-                newbody = [self.head_position[:]] + self.body_position[:]
-                self.body_position = newbody
-                self.draw_snake_body()
-
-                # Erase snake tail
-                colorIndex = (fill[0] + fill[1] + 1) % 2
-                tile = (fill[0] * self.TILESIZE, fill[1] * self.TILESIZE, self.TILESIZE, self.TILESIZE)
-                self.screen.fill(self.CMAP[colorIndex], tile)
-
-            pygame.display.update()
-            self.ready.set()
-
-    def move_snake_thread(self):
-        self.clock.tick(5)
-        t = threading.Thread(target=self.move_snake, args=(self.direction[0], self.direction[1]))
-        t.start()
-        ready.wait()
+        self.screen = pygame.display.set_mode((self.TILESIZE * self.SCREENSIZE , self.TILESIZE * self.SCREENSIZE))
+        self.draw_background()
+        self.draw_title("S N A K E   G A M E")
+        self.snake = Snake(self.TILESIZE)
+        self.cookie = Cookie(self.TILESIZE)
+        self.state = self.RUN
 
     def on_event(self, event):
         if event.type == pygame.QUIT:
-            self.running = False
+            self._running = False
 
         elif event.type == KEYDOWN:
-            if self.state == self.RUNNING:
+            if self.state == self.RUN:
                 if event.key == K_ESCAPE:
-                    self.running = False
+                    self._running = False
 
-                if event.key == K_LEFT and self.direction != self.LEFT:
-                    self.direction = self.LEFT
-                    self.move_snake_thread()
+                if event.key == K_LEFT:
+                    self.snake.turn_left()
 
-                if event.key == K_RIGHT and self.direction != self.RIGHT:
-                    self.direction = self.RIGHT
-                    self.move_snake_thread()
+                if event.key == K_RIGHT:
+                    self.snake.turn_right()
 
-                if event.key == K_UP and self.direction != self.UP:
-                    self.direction = self.UP
-                    self.move_snake_thread()
+                if event.key == K_UP:
+                    self.snake.turn_up()
 
-                if event.key == K_DOWN and self.direction != self.DOWN:
-                    self.direction = self.DOWN
-                    self.move_snake_thread()
-            else:
-                pass
-                # Do something
+                if event.key == K_DOWN:
+                    self.snake.turn_down()
 
-    def cleanup(self):
+    def on_loop(self):
+        if self.snake.dead:
+            self.state == self.STOP
+        else:
+            ate_cookie = self.snake.move(self.SCREENSIZE, self.cookie.cookie_position)
+            if ate_cookie: self.cookie.new(self.SCREENSIZE, self.snake.body_position)
+        pass
+
+    def on_render(self):
+        if self.snake.dead:
+            self.snake.rip(self.TILESIZE, self.screen)
+            self.draw_end("G A M E  O V E R")
+        else:
+            self.snake.erase(self.CMAP, self.TILESIZE, self.screen)
+            self.snake.draw(self.TILESIZE, self.screen)
+            self.cookie.draw(self.TILESIZE, self.screen)
+            self.draw_score("S C O R E : ", self.cookie.cookie_eaten)
+
+        pygame.display.flip()
+
+    def on_cleanup(self):
         pygame.quit()
 
-    def start(self):
-        if self.setup() == False:
-            self.running = False
+    def on_execute(self):
+        if self.on_init() == False:
+            self._running = False
 
-        while(self.running):
-            for event in pygame.event.get():
-                self.on_event(event)
+        while(self._running):
+            pygame.event.pump()
+            key = pygame.key.get_pressed()
 
-            if len(self.direction) != 0 and self.ready.is_set():
-                self.move_snake_thread()
+            if (key[K_LEFT]):
+                self.snake.turn_left()
 
-        self.cleanup()
+            if (key[K_RIGHT]):
+                self.snake.turn_right()
+
+            if (key[K_UP]):
+                self.snake.turn_up()
+
+            if (key[K_DOWN]):
+                self.snake.turn_down()
+
+            if (key[K_ESCAPE]):
+                self._running = False
+
+            self.on_loop()
+            self.on_render()
+            time.sleep(0.15);
+
+        self.on_cleanup()
 
 if __name__ == "__main__" :
-    ready = threading.Event()
-    leggo = App(ready)
-    leggo.start()
+    leggo = App()
+    leggo.on_execute()
