@@ -1,4 +1,4 @@
 # SnakeGame
-Snake game in python using pygame
+Snake game in Python using Pygame
 
-![alt text](https://github.com/luk5/SnakeGame/tree/master/images/gameScreenshot.png)
+![](https://github.com/luk5/SnakeGame/blob/master/images/gameScreenshot.png)
